@@ -7,7 +7,7 @@ CC = gcc
 # -Iinclude : Look for headers in the 'include' folder
 # -pthread  : Required for threads
 # -Wall     : Show warnings
-CFLAGS = -Wall -Wextra -Iinclude -pthread
+CFLAGS = -Wall -Wextra -Iinclude -I/usr/include -llgpio -pthread
 
 # ------------------------------------------------
 # Files and Directories
@@ -16,7 +16,9 @@ CFLAGS = -Wall -Wextra -Iinclude -pthread
 TARGET = backend
 
 # The source files
-SRCS = src/main.c
+SRCS =  src/backend.c \
+		src/input.c \
+		src/logic.c
 
 # ------------------------------------------------
 # Build Rules

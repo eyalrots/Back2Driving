@@ -1,6 +1,7 @@
 #ifndef __BACKEND_H__
 #define __BACKEND_H__
 
-#include <lgpio.h>
+#include </usr/include/lgpio.h>
+#include <stdio.h>
 
 #endif

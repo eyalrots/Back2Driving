@@ -1,0 +1,15 @@
+{
+    // Enable formatting on save
+    "editor.formatOnSave": true,
+    // Tell VS Code to use the Clangd extension for C files
+    "[c]": {
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    },
+    // (Optional) If you are using the separate 'Clang-Format' extension instead:
+    // "editor.defaultFormatter": "xaver.clang-format"
+    // Ensure clangd knows where to find your compiler headers
+    "clangd.arguments": [
+        "--background-index",
+        "--query-driver=/usr/bin/gcc,/usr/bin/g++"
+    ]
+}
