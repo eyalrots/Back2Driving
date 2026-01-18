@@ -1,0 +1,33 @@
+# clang-format configuration file
+# Based on Linux kernel style with modifications:
+# - IndentWidth changed from 8 to 4
+# - UseTab changed to Never (use spaces instead of tabs)
+# - Removed kernel-specific macros and settings
+---
+BasedOnStyle: LLVM
+Language: Cpp
+IndentWidth: 4
+UseTab: Never
+BreakBeforeBraces: Linux
+AlwaysBreakBeforeMultilineStrings: false
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+IndentCaseLabels: false
+AlignEscapedNewlines: Left
+AlignTrailingComments: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AlignAfterOpenBracket: Align
+AlignOperands: true
+SpaceAfterCStyleCast: false
+MaxEmptyLinesToKeep: 2
+BreakBeforeBinaryOperators: NonAssignment
+BreakStringLiterals: false
+SortIncludes: false
+ContinuationIndentWidth: 4
+ColumnLimit: 80
+PointerAlignment: Right
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
