@@ -1,4 +1,13 @@
 {
+    // Disable quick suggestions
+    "editor.quickSuggestions": {
+        "other": false,
+        "comments": false,
+        "strings": false
+    },
+    "editor.suggestOnTriggerCharacters": false,
+    // Disable 'Gohst text'
+    "editor.inlineSuggest.enabled": false,
     // Enable formatting on save
     "editor.formatOnSave": true,
     // Tell VS Code to use the Clangd extension for C files
