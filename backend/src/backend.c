@@ -2,6 +2,5 @@
 
 int main(void)
 {
-    test_gpio();
     return 0;
 }
