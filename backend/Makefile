@@ -20,7 +20,9 @@ TARGET = backend
 
 SRCS =  src/backend.c \
         src/input.c \
-        src/logic.c
+        src/logic.c \
+		src/shared.c \
+		src/buffer.c
 
 # ------------------------------------------------
 # Build Rules

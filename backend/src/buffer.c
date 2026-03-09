@@ -41,7 +41,6 @@ int read_hx711_data(int handle, uint32_t *rx_buffer)
         return -1;
     struct sched_param param;
     int status = 0;
-    int max_priority = 0;
     int i = 0;
     *rx_buffer = 0;
 
@@ -103,9 +102,10 @@ int read_hx711_data(int handle, uint32_t *rx_buffer)
      *  If the 24th bit (the sign bit) is a 1, we must fill the top 8 bits of
      * our 32-bit variable with 1s so C understands it is a negative number.
      */
-    if (*rx_buffer & 0x800000)
+    if (*rx_buffer & 0x800000) {
         *rx_buffer |= 0xFF000000;
-
+	}
+        
 	status = 0;
 ret:
     return status;

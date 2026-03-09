@@ -14,13 +14,12 @@
 #define ADC_CHANNEL 0x00
 /* Tx Buffer locations */
 /* Byte 1 */
+#define TX_BYTE_1_ZERO 0xF8
 #define START_BIT 0x04
 #define SGL_DIFF 0x02
 #define D2 0x01
-#define TX_BYTE_1_ZERO 0xF8
 /* Byte 2 */
-#define D1 0x80
-#define D0 0x40
+#define D1_0 0x03
 #define TX_BYTE_2_ZERO 0x3F
 
 /* Rx Buffer locations*/

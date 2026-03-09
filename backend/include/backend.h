@@ -3,4 +3,6 @@
 
 #include "input.h"
 
+#include <pthread.h>
+
 #endif /* __BACKEND_H__ */
