@@ -11,11 +11,13 @@ void *spi_thread_func(void *arg)
 		return NULL;
 
     /* Get samples in infinite loop */
+    printf("Starting sampling Hall-Effect...\n");
     if (get_spi_data(spi_handle, shared_data) == -1)
         return NULL;
 
     /* destroy shared memory */
     destroy(shared_data);
+    printf("Finished sampling Hall-Effect.\n");
 
     return NULL;
 }
@@ -31,12 +33,14 @@ void *hx711_thread_func(void *arg)
         return NULL;
 
     /* Get samples in infinite loop */
+    printf("Starting sampling Load-Cell...\n");
     if (get_hx711_data(hx711_handle, shared_data) == -1)
         return NULL;
 
     /* destroy shared memory */
     destroy(shared_data);
-
+	printf("Finished sampling Load-Cell.\n");
+    
     return NULL;
 }
 
@@ -51,8 +55,12 @@ int main(void)
     pthread_t hx711_thread;
 
     /* Setup GPIO */
-    io_setup(&gpio_handle, &spi_handle);
-
+    if (io_setup(&gpio_handle, &spi_handle) < 0) {
+		printf("Error opening GPIO or SPI.\n");
+    	return 0;
+    }
+    printf("Setup Complete.\n");
+    
     /* Create two threads for spi and hx711 */
     if (pthread_create(&spi_thread, NULL, spi_thread_func,
                        (void *)&spi_handle)) {
@@ -62,6 +70,7 @@ int main(void)
                        (void *)&gpio_handle)) {
         perror("Error: Failed to create HX711 thread.\n");
     }
+    printf("Created Threads Successfuly.\n");
 
     /* Join Created threads */
     if (pthread_join(spi_thread, NULL)) {
@@ -70,6 +79,7 @@ int main(void)
     if (pthread_join(hx711_thread, NULL)) {
         perror("Error: Failed to join HX711 thread.\n");
     }
+    printf("Joined Threads Successfuly.\n");
 
     return 0;
 }

@@ -36,7 +36,7 @@ int io_setup(int *gpio_handle, int *spi_handle)
     /* Open SPI component */
     status = lgSpiOpen(SPI_DEV, SPI_CHAN, SPI_BAUD, 0);
     if (status < 0) {
-        printf("Failed to open SPI connection: %s\n", lguErrorText(status));
+        printf("Failed to open SPI connection (error: %d): %s\n", status, lguErrorText(status));
         goto ret;
     }
     *spi_handle = status;
@@ -76,7 +76,7 @@ int inner_loop_spi(uint8_t *tx_buf, uint8_t *rx_buf, int handle)
     /* Transfer 3 bytes simultaneously */
     status = lgSpiXfer(handle, (const char *)tx_buf, (char *)rx_buf, 3);
     if (status < 0) {
-        printf("Error transfering data on SPI: %s\n", lguErrorText(status));
+        printf("Error transfering data on SPI (handle-%d): %s\n", handle, lguErrorText(status));
         goto ret;
     }
 
@@ -93,7 +93,6 @@ ret:
 int get_spi_data(int handle, shared_data_t *shared_data)
 {
     if (!shared_data) {
-        printf("Buffers are not defined.\n");
         return -1;
     }
 
