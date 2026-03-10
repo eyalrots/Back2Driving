@@ -3,8 +3,13 @@ import json
 import os
 
 # --- הגדרות ---
-SONG_PATH = "Katy Perry_Firework.mp3" # ודאי שזה השם המדויק של קובץ האודיו שלך
-OUTPUT_FILE = "beatmap.json"
+# חישוב הנתיבים הדינמיים
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.dirname(CURRENT_DIR)
+
+# --- הגדרות ---
+SONG_PATH = os.path.join(FRONTEND_DIR, "audio", "Katy Perry_Firework.mp3")
+OUTPUT_FILE = os.path.join(CURRENT_DIR, "beatmap.json")
 
 def record_beatmap():
     pygame.init()

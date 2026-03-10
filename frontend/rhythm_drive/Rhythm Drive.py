@@ -32,8 +32,13 @@ PERFECT_WINDOW = 60
 GOOD_WINDOW = 160
 GRACE_PERIOD = 150      
 
-BEATMAP_PATH = "beatmap.json"
-MUSIC_PATH = "Katy Perry_Firework.mp3"
+# --- Asset Paths ---
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.dirname(CURRENT_DIR)
+
+BEATMAP_PATH = os.path.join(CURRENT_DIR, "beatmap.json")
+# Music is in the 'audio' folder, which is a sibling to the 'rhythm_drive' folder
+MUSIC_PATH = os.path.join(FRONTEND_DIR, "audio", "Katy Perry_Firework.mp3")
 
 def get_x_for_lane(y, lane_type):
     """Calculates X position based on Y for perspective road."""
@@ -151,7 +156,7 @@ class Game:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Rhythm Drive: Pro Rehab")
+        pygame.display.set_caption("Rhythm Drive: Musical rehab")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("Verdana", 24, bold=True)
         self.large_font = pygame.font.SysFont("Verdana", 50, bold=True)
