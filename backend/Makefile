@@ -3,22 +3,26 @@
 # ------------------------------------------------
 CC = gcc
 
-# Flags:
+# CFLAGS: Compile-time flags
 # -Iinclude : Look for headers in the 'include' folder
-# -pthread  : Required for threads
 # -Wall     : Show warnings
-CFLAGS = -Wall -Wextra -Iinclude -I/usr/include -llgpio -pthread
+# (Removed -llgpio and -pthread from here)
+CFLAGS = -Wall -Wextra -Iinclude -I/usr/include
+
+# LDLIBS: Link-time flags (Libraries)
+# These must come AFTER the source files in the gcc command
+LDLIBS = -llgpio -pthread
 
 # ------------------------------------------------
 # Files and Directories
 # ------------------------------------------------
-# The final executable name
 TARGET = backend
 
-# The source files
 SRCS =  src/backend.c \
-		src/input.c \
-		src/logic.c
+        src/input.c \
+        src/logic.c \
+		src/shared.c \
+		src/buffer.c
 
 # ------------------------------------------------
 # Build Rules
@@ -26,12 +30,9 @@ SRCS =  src/backend.c \
 
 all: $(TARGET)
 
-# Compile everything in one go.
-# This creates the 'OS' executable directly without leaving .o files.
 $(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) $(SRCS) -o $(TARGET)
+	$(CC) $(CFLAGS) $(SRCS) -o $(TARGET) $(LDLIBS)
 
-# Clean only deletes the executable (since no .o files are ever made)
 clean:
 	rm -f $(TARGET)
 

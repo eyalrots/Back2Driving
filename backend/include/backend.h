@@ -1,7 +1,8 @@
 #ifndef __BACKEND_H__
 #define __BACKEND_H__
 
-#include </usr/include/lgpio.h>
-#include <stdio.h>
+#include "input.h"
 
-#endif
+#include <pthread.h>
+
+#endif /* __BACKEND_H__ */
