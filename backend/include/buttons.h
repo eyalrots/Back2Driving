@@ -17,5 +17,6 @@ typedef struct {
 #define BUTTON_2 27
 
 int buttons_main_operation();
+void buttons_check_operation();
 
 #endif

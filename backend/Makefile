@@ -22,7 +22,8 @@ SRCS =  src/backend.c \
         src/input.c \
         src/logic.c \
 		src/shared.c \
-		src/buffer.c
+		src/buffer.c \
+		src/buttons.c
 
 # ------------------------------------------------
 # Build Rules

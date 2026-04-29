@@ -81,3 +81,46 @@ int buttons_main_operation() {
     return 0;
 }
 
+void buttons_on_press(int e, lgGpioAlert_p alerts, void *userdata)
+{
+    for (i = 0; i < e; i++) {
+        printf("u=%d t=%" PRIu64 " c=%d g=%d l=%d f=%d (%d of %d)\n", userdata,
+               evt[i].report.timestamp, evt[i].report.chip, evt[i].report.gpio,
+               evt[i].report.level, evt[i].report.flags, i + 1, e);
+    }
+}
+
+void buttons_check_operation()
+{
+    // Open the gpiochip (Use 4 if on Pi 5, or 0 for older Pi's)
+    int handle = lgGpiochipOpen(0);
+    if (handle < 0) {
+        printf("Failed to open gpiochip. Run with sudo.\n");
+        return -1;
+    }
+
+    // Claim the pin
+    if (lgGpioClaimAlert(handle, 0, LG_BOTH_EDGES, BUTTON_1, -1) < 0) {
+        printf("Failed to claim GPIO %d\n", BUTTON_1);
+        return -1;
+    }
+
+    // Set debounce (10ms)
+    lgGpioSetDebounce(handle, BUTTON_1, 10000);
+
+    // Register the callback, passing the specific struct as 'userdata'
+    lgGpioSetAlertsFunc(handle, BUTTON_1, button_callback);
+
+    // Claim the pin
+    if (lgGpioClaimAlert(handle, 0, LG_BOTH_EDGES, BUTTON_2, -1) < 0) {
+        printf("Failed to claim GPIO %d\n", BUTTON_2);
+        return -1;
+    }
+
+    // Set debounce (10ms)
+    lgGpioSetDebounce(handle, BUTTON_2, 10000);
+
+    // Register the callback, passing the specific struct as 'userdata'
+    lgGpioSetAlertsFunc(handle, BUTTON_2, button_callback);
+}
+

@@ -44,42 +44,49 @@ void *hx711_thread_func(void *arg)
     return NULL;
 }
 
+// int main(void)
+// {
+//     /* handles */
+//     int gpio_handle = 0;
+//     int spi_handle = 0;
+
+//     /* Threads */
+//     pthread_t spi_thread;
+//     pthread_t hx711_thread;
+
+//     /* Setup GPIO */
+//     if (io_setup(&gpio_handle, &spi_handle) < 0) {
+// 		printf("Error opening GPIO or SPI.\n");
+//     	return 0;
+//     }
+//     printf("Setup Complete.\n");
+    
+//     /* Create two threads for spi and hx711 */
+//     if (pthread_create(&spi_thread, NULL, spi_thread_func,
+//                        (void *)&spi_handle)) {
+//         perror("Error: Failed to create SPI thread.\n");
+//     }
+//     if (pthread_create(&hx711_thread, NULL, hx711_thread_func,
+//                        (void *)&gpio_handle)) {
+//         perror("Error: Failed to create HX711 thread.\n");
+//     }
+//     printf("Created Threads Successfuly.\n");
+
+//     /* Join Created threads */
+//     if (pthread_join(spi_thread, NULL)) {
+//         perror("Error: Failed to joid SPI thread.\n");
+//     }
+//     if (pthread_join(hx711_thread, NULL)) {
+//         perror("Error: Failed to join HX711 thread.\n");
+//     }
+//     printf("Joined Threads Successfuly.\n");
+
+//     return 0;
+// }
+
 int main(void)
 {
-    /* handles */
-    int gpio_handle = 0;
-    int spi_handle = 0;
-
-    /* Threads */
-    pthread_t spi_thread;
-    pthread_t hx711_thread;
-
-    /* Setup GPIO */
-    if (io_setup(&gpio_handle, &spi_handle) < 0) {
-		printf("Error opening GPIO or SPI.\n");
-    	return 0;
-    }
-    printf("Setup Complete.\n");
+	buttons_check_operation();
     
-    /* Create two threads for spi and hx711 */
-    if (pthread_create(&spi_thread, NULL, spi_thread_func,
-                       (void *)&spi_handle)) {
-        perror("Error: Failed to create SPI thread.\n");
-    }
-    if (pthread_create(&hx711_thread, NULL, hx711_thread_func,
-                       (void *)&gpio_handle)) {
-        perror("Error: Failed to create HX711 thread.\n");
-    }
-    printf("Created Threads Successfuly.\n");
-
-    /* Join Created threads */
-    if (pthread_join(spi_thread, NULL)) {
-        perror("Error: Failed to joid SPI thread.\n");
-    }
-    if (pthread_join(hx711_thread, NULL)) {
-        perror("Error: Failed to join HX711 thread.\n");
-    }
-    printf("Joined Threads Successfuly.\n");
-
     return 0;
 }

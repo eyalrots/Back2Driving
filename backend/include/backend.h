@@ -2,6 +2,7 @@
 #define __BACKEND_H__
 
 #include "input.h"
+#include "buttons.h"
 
 #include <pthread.h>
 
