@@ -10,7 +10,7 @@ int create_or_connect(shared_data_t **shared_data)
         perror("key");
         return -1;
 	}
-    shmid = shmget(key, 1024, 666 | IPC_CREAT);
+    shmid = shmget(key, 1024, 0666 | IPC_CREAT);
     if (shmid == -1) {
         perror("shmget");
         return -1;
@@ -22,28 +22,28 @@ int create_or_connect(shared_data_t **shared_data)
 		return -1;
     }
 
-    memset(*shared_data, 0, sizeof(shared_data_t));
+    //memset(*shared_data, 0, sizeof(shared_data_t));
 
     return 0;
 }
 
 int writer_1(shared_data_t *shared_data, sensor_data_t *new_data)
 {
-    if (!shared_data || !new_data)
-		return -1;
+    // if (!shared_data || !new_data)
+	// 	return -1;
     
-    shared_data->flags[0] = 1;
-    shared_data->turn = 1;
+    // shared_data->flags[0] = 1;
+    // shared_data->turn = 1;
 
-    /* Busy wait */
-    while (shared_data->flags[1] && shared_data->turn)
-        ;
+    // /* Busy wait */
+    // while (shared_data->flags[1] && shared_data->turn)
+    //     ;
 
     /* Enter critical section */
     shared_data->load_cell_sensor = *new_data;
     /* Finish critical section */
 
-    shared_data->flags[0] = 0;
+    // shared_data->flags[0] = 0;
 
     return 0;
 }
@@ -53,18 +53,18 @@ int writer_2(shared_data_t *shared_data, sensor_data_t *new_data)
     if (!shared_data || !new_data)
         return -1;
 
-    shared_data->flags[1] = 1;
-    shared_data->turn = 0;
+    // shared_data->flags[1] = 1;
+    // shared_data->turn = 0;
 
-    /* Busy wait */
-    while (shared_data->flags[0] && !shared_data->turn)
-        ;
+    // /* Busy wait */
+    // while (shared_data->flags[0] && !shared_data->turn)
+    //     ;
 
     /* Enter critical section */
     shared_data->hall_effect_sensor = *new_data;
     /* Finish critical section */
 
-    shared_data->flags[1] = 0;
+    // shared_data->flags[1] = 0;
 
     return 0;
 }

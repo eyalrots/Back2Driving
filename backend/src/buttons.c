@@ -1,4 +1,4 @@
-#include "../include/butons.h"
+#include "../include/buttons.h"
 
 /* Temporary Global Variables */
 uint64_t press_start_time = 0;
@@ -7,6 +7,8 @@ double last_press_duration_ms = 0.0;
 void button_callback(int e, lgGpioAlert_p alerts, void *userdata) {
 	// Cast the generic userdata pointer back to our ButtonState struct
     ButtonState *btn = (ButtonState *)userdata; 
+
+	sensor_data_t btn_data = {};
 
     for (int i = 0; i < e; i++) {
         int level = alerts[i].report.level;
@@ -29,9 +31,42 @@ void button_callback(int e, lgGpioAlert_p alerts, void *userdata) {
                 
                 // -> Call your system operation function here <-
                 // Example: operate_system(btn->pin, btn->last_press_duration_ms);
+				register_press(btn);
             }
         }
     }
+}
+
+int register_press(ButtonState *btn) {
+	if (!btn)
+		return -1;
+
+	printf("registering press...\n");
+
+	shared_data_t *shared_data = NULL;
+
+    /* Create or connect to shared memory */
+    create_or_connect(&shared_data);
+    if (!shared_data)
+        return -1;
+
+	sensor_data_t btn_data = {};
+
+	btn_data.sample = btn->last_press_duration_ms;
+	btn_data.time_stump = btn->press_start_time;
+
+	if (btn->pin == BUTTON_1) {
+		printf("registering on button 1.\n");
+		writer_1(shared_data, &btn_data);
+	} else if (btn->pin == BUTTON_2) {
+		writer_2(shared_data, &btn_data);
+		printf("registering on button 2.\n");
+	}
+
+	printf("Press registered.\n");
+	printf("Button 1: %d :: Button 2: %d.\n", shared_data->load_cell_sensor.sample, shared_data->hall_effect_sensor.sample);
+
+	return 0;
 }
 
 int setup_button(int handle, ButtonState *btn) {
@@ -81,10 +116,11 @@ int buttons_main_operation() {
     return 0;
 }
 
-void buttons_on_press(int e, lgGpioAlert_p alerts, void *userdata)
+void buttons_on_press(int e, lgGpioAlert_p evt, void *userdata)
 {
+    int i = 0;
     for (i = 0; i < e; i++) {
-        printf("u=%d t=%" PRIu64 " c=%d g=%d l=%d f=%d (%d of %d)\n", userdata,
+        printf("t=%" PRIu64 " c=%d g=%d l=%d f=%d (%d of %d)\n",
                evt[i].report.timestamp, evt[i].report.chip, evt[i].report.gpio,
                evt[i].report.level, evt[i].report.flags, i + 1, e);
     }
@@ -96,31 +132,37 @@ void buttons_check_operation()
     int handle = lgGpiochipOpen(0);
     if (handle < 0) {
         printf("Failed to open gpiochip. Run with sudo.\n");
-        return -1;
+        return;
     }
 
     // Claim the pin
     if (lgGpioClaimAlert(handle, 0, LG_BOTH_EDGES, BUTTON_1, -1) < 0) {
         printf("Failed to claim GPIO %d\n", BUTTON_1);
-        return -1;
+        return;
     }
 
     // Set debounce (10ms)
     lgGpioSetDebounce(handle, BUTTON_1, 10000);
 
     // Register the callback, passing the specific struct as 'userdata'
-    lgGpioSetAlertsFunc(handle, BUTTON_1, button_callback);
+    lgGpioSetAlertsFunc(handle, BUTTON_1, buttons_on_press, NULL);
 
     // Claim the pin
     if (lgGpioClaimAlert(handle, 0, LG_BOTH_EDGES, BUTTON_2, -1) < 0) {
         printf("Failed to claim GPIO %d\n", BUTTON_2);
-        return -1;
+        return;
     }
 
     // Set debounce (10ms)
     lgGpioSetDebounce(handle, BUTTON_2, 10000);
 
     // Register the callback, passing the specific struct as 'userdata'
-    lgGpioSetAlertsFunc(handle, BUTTON_2, button_callback);
+    lgGpioSetAlertsFunc(handle, BUTTON_2, buttons_on_press, NULL);
+
+	while (1) {
+		sleep(1);
+	}
+
+	lgGpiochipClose(handle);
 }
 

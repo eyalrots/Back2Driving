@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <lgpio.h>
+#include "shared.h"
 
 typedef struct {
     int pin;
@@ -18,5 +19,7 @@ typedef struct {
 
 int buttons_main_operation();
 void buttons_check_operation();
+int setup_button(int handle, ButtonState *btn);
+int register_press(ButtonState *btn);
 
 #endif

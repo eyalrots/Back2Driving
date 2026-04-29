@@ -127,3 +127,13 @@ int get_hx711_data(int handle, shared_data_t *shared_data)
 
     return 0;
 }
+
+// int get_button_data(shared_data_t *shared_data, ButtonState *btn_1, ButtonState *btn_2) {
+// 	while (1) {
+// 		register_press(shared_data, btn_1, btn_2);
+// 		printf("registered press.\n");
+// 		sleep(1);
+// 		printf("Button 1: %d :: Button 2: %d\n", shared_data->load_cell_sensor.sample, shared_data->hall_effect_sensor.sample);
+// 	}
+// 	return 0;
+// }
