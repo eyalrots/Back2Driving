@@ -1,6 +1,7 @@
 import sys
 import random
 import time
+import os
 from datetime import datetime
 import pygame  # For Clinical Audio Feedback
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QStackedWidget, QWidget, 
@@ -11,7 +12,18 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QStackedWidget, QWidget,
 from PyQt6.QtCore import QTimer, Qt, QRectF, pyqtSignal
 from PyQt6.QtGui import QColor, QBrush, QPen, QPainter, QFont, QLinearGradient
 
+# Add parent directory to path to import access_shared
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from access_shared import SensorSharedMemory
+    HAS_SENSOR = True
+except ImportError as e:
+    SensorSharedMemory = None
+    HAS_SENSOR = False
+    print(f"Warning: Shared memory is not available. Falling back to keyboard. ({e})")
+
 # --- CONSTANTS & CONFIG ---
+# ... (rest of constants)
 WIDTH = 800
 HEIGHT = 600
 FPS = 60
@@ -203,13 +215,37 @@ class GameScreen(QWidget):
     finished_signal = pyqtSignal(dict)
     def __init__(self):
         super().__init__()
+        # Import inside __init__ as requested
+        #from access_shared import SensorSharedMemory
+        
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.scene = QGraphicsScene(0, 0, WIDTH, HEIGHT)
         self.scene.setBackgroundBrush(QBrush(QColor(30, 30, 35)))
         self.view = GameView(self.scene, self)
         self.layout.addWidget(self.view)
-        self.view.key_signal.connect(self.handle_input)
+        self.view.key_signal.connect(self.handle_keyboard_input)
+        
+        # Initialize Shared Memory with specific parameters
+        # Raspberry Pi / Linux: use hardware shared memory
+        # Windows / development computer: keyboard fallback only
+        self.sensor_shm = None
+
+        if HAS_SENSOR:
+            try:
+                self.sensor_shm = SensorSharedMemory(path="/home", project_id='R')
+                self.sensor_shm.connect()
+                print("Bullseye: Connected to Hardware via Shared Memory.")
+            except Exception as e:
+                print(f"Bullseye: Hardware connection failed: {e}")
+                self.sensor_shm = None
+ 
+        self.last_input_state = {"gas": False, "brake": False}
+        self.keys_pressed = set()
+        self.gas_value = 0.0
+        self.brake_value = 0.0
+        
+
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_game)
         self.countdown_timer = QTimer()
@@ -230,6 +266,9 @@ class GameScreen(QWidget):
         self.gas_release_time = None
         self.active_target_spawn_time = None
         self.has_braked_for_current_target = False
+        self.last_input_state = {"gas": False, "brake": False}
+        self.gas_value = 0.0
+        self.brake_value = 0.0
         self.setup_environment()
         self.timer.start(16)
         self.countdown_timer.start(1000)
@@ -251,7 +290,7 @@ class GameScreen(QWidget):
             self.scene.addItem(line)
             self.road_lines.append(line)
         self.player = PlayerCar()
-        self.player.setPos(WIDTH // 2 - 25, HEIGHT - 150)
+        self.player.setPos(WIDTH // 2 - 25, HEIGHT - 150) # Fixed center position
         self.scene.addItem(self.player)
         self.score_text = self.create_hud(f"SCORE: 0", 30, 30, "white", 22)
         self.streak_text = self.create_hud(f"STREAK: 0/3", 30, 100, "#00FFFF", 16)
@@ -287,19 +326,11 @@ class GameScreen(QWidget):
         self.active_target_spawn_time = time.time()
         self.has_braked_for_current_target = False
 
-    def handle_input(self, key, is_pressed):
-        if not self.is_active: return
+    def handle_keyboard_input(self, key, is_pressed):
         if is_pressed:
-            if key in [Qt.Key.Key_Down, 16777237]:
-                if self.active_target_spawn_time and not self.has_braked_for_current_target:
-                    self.reaction_times.append(time.time() - self.active_target_spawn_time)
-                    self.has_braked_for_current_target = True
-                if self.gas_release_time:
-                    self.ptt_times.append(time.time() - self.gas_release_time)
-                    self.gas_release_time = None
+            self.keys_pressed.add(key)
         else:
-            if key in [Qt.Key.Key_Up, 16777235]:
-                self.gas_release_time = time.time()
+            self.keys_pressed.discard(key)
 
     def tick_time(self):
         self.time_left -= 1
@@ -308,45 +339,136 @@ class GameScreen(QWidget):
             self.end_game()
 
     def update_game(self):
-        keys = self.view.keys_pressed
-        gas = any(k in keys for k in [Qt.Key.Key_Up, 16777235])
-        brake = any(k in keys for k in [Qt.Key.Key_Down, 16777237])
-        self.player.set_braking(brake)
-        if gas: self.current_speed += self.config["ACCEL"]
-        elif brake: self.current_speed -= self.config["BRAKE_FORCE"]
-        else:
-            if self.current_speed > 0: self.current_speed -= FRICTION
+        if not self.is_active:
+            return
+
+        # 1. Read Inputs: Hardware samples + Keyboard fallback
+
+        keyboard_gas = any(k in self.keys_pressed for k in [Qt.Key.Key_Up, 16777235])
+        keyboard_brake = any(k in self.keys_pressed for k in [Qt.Key.Key_Down, 16777237])
+
+        # Default values: keyboard mode
+        gas_value = 1.0 if keyboard_gas else 0.0
+        brake_value = 1.0 if keyboard_brake else 0.0
+
+        # Temporary calibration values
+        GAS_MIN = 0
+        GAS_MAX = 4095
+        BRAKE_MIN = 0
+        BRAKE_MAX = 4095
+
+        def normalize_sensor(raw_value, min_value, max_value):
+            if max_value == min_value:
+                return 0.0
+
+            value = (raw_value - min_value) / (max_value - min_value)
+            return max(0.0, min(1.0, value))
+
+        # Hardware reading from Shared Memory
+        if self.sensor_shm:
+            try:
+                data = self.sensor_shm.read_data()
+
+                # load_cell  -> brake force
+                # hall_effect -> gas pedal position
+                raw_brake = data["load_cell"]["sample"]
+                raw_gas = data["hall_effect"]["sample"]
+
+                gas_value = normalize_sensor(raw_gas, GAS_MIN, GAS_MAX)
+                brake_value = normalize_sensor(raw_brake, BRAKE_MIN, BRAKE_MAX)
+
+                # Keyboard can still override for testing
+                if keyboard_gas:
+                    gas_value = 1.0
+                if keyboard_brake:
+                    brake_value = 1.0
+
+            except Exception as e:
+                print(f"Sensor read error: {e}")
+
+        # Thresholds: from continuous values to pressed/not pressed
+        GAS_THRESHOLD = 0.15
+        BRAKE_THRESHOLD = 0.15
+
+        gas_pressed = gas_value > GAS_THRESHOLD
+        brake_pressed = brake_value > BRAKE_THRESHOLD
+
+        # 2. Process Clinical Metrics - Edge Detection
+
+        if brake_pressed and not self.last_input_state["brake"]:
+            if self.active_target_spawn_time and not self.has_braked_for_current_target:
+                self.reaction_times.append(time.time() - self.active_target_spawn_time)
+                self.has_braked_for_current_target = True
+
+            if self.gas_release_time:
+                self.ptt_times.append(time.time() - self.gas_release_time)
+                self.gas_release_time = None
+
+        if not gas_pressed and self.last_input_state["gas"]:
+            self.gas_release_time = time.time()
+
+        self.last_input_state = {"gas": gas_pressed, "brake": brake_pressed}
+
+        # 3. Apply Speed using continuous gas/brake values
+
+        self.player.set_braking(brake_pressed)
+
+        if gas_value > 0.05:
+            self.current_speed += self.config["ACCEL"] * gas_value
+
+        if brake_value > 0.05:
+            self.current_speed -= self.config["BRAKE_FORCE"] * brake_value
+
+        if gas_value <= 0.05 and brake_value <= 0.05:
+            if self.current_speed > 0:
+                self.current_speed -= FRICTION
+
         self.current_speed = max(0, min(self.current_speed, self.config["MAX_SPEED"]))
+
+        # 4. Move environment
 
         for p in self.grass_patches:
             p.setY(p.y() + self.current_speed)
-            if p.y() > HEIGHT: p.setY(p.y() - 1100)
+            if p.y() > HEIGHT:
+                p.setY(p.y() - 1100)
+
         for line in self.road_lines:
             line.setY(line.y() + self.current_speed)
-            if line.y() > HEIGHT: line.setY(line.y() - 850)
+            if line.y() > HEIGHT:
+                line.setY(line.y() - 850)
+
+        # 5. Move targets and check scoring
 
         for t in self.targets[:]:
             t.setY(t.y() + self.current_speed)
+
             if self.current_speed == 0 and not t.scored:
                 car_rect = self.player.sceneBoundingRect()
+
                 if t.sceneBoundingRect().intersects(car_rect):
                     pts, msg, color = t.check_score(car_rect)
                     t.scored = True
-                    # Feedback & Audio
+
                     if pts > 0:
                         self.score += pts
+
                         if isinstance(t, QuickTarget):
                             self.combo_count += 1
                             play_sound(SUCCESS_SOUNDS)
+
                             if self.combo_count == 3:
                                 self.score += 15
                                 self.combo_count = 0
                                 msg, color = "COMBO STREAK! +15", "#FFD700"
+
                         elif isinstance(t, MultiTarget) and pts == 5:
                             play_sound(SUCCESS_SOUNDS)
+
                     else:
                         play_sound(FAIL_SOUNDS)
-                        if isinstance(t, QuickTarget): self.combo_count = 0
+
+                        if isinstance(t, QuickTarget):
+                            self.combo_count = 0
 
                     self.streak_text.setPlainText(f"STREAK: {self.combo_count}/3")
                     self.score_text.setPlainText(f"SCORE: {self.score}")
@@ -359,12 +481,20 @@ class GameScreen(QWidget):
             if t.y() > HEIGHT:
                 if not t.scored:
                     play_sound(FAIL_SOUNDS)
-                    if isinstance(t, QuickTarget): self.combo_count = 0
+
+                    if isinstance(t, QuickTarget):
+                        self.combo_count = 0
+
                     self.streak_text.setPlainText(f"STREAK: {self.combo_count}/3")
+
                 self.scene.removeItem(t)
                 self.targets.remove(t)
+
                 dist = self.config["SPAWN_DIST"]
                 self.spawn_target(random.randint(dist[0], dist[1]))
+
+        # 6. Update HUD
+
         self.speed_text.setPlainText(f"SPEED: {int(self.current_speed * 6)} km/h")
 
     def clear_msg(self):

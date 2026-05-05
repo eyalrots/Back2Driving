@@ -4,8 +4,20 @@ import time
 import os
 import csv
 import math
+import sys
+
+# Add parent directory to path to import access_shared
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from access_shared import SensorSharedMemory
+    HAS_SENSOR = True
+except ImportError as e:
+    SensorSharedMemory = None
+    HAS_SENSOR = False
+    print(f"Warning: Shared memory is not available. Falling back to keyboard. ({e})")
 
 # --- Configuration & Constants ---
+# ... (rest of imports and constants)
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 FPS = 60
@@ -161,7 +173,22 @@ class Game:
         self.font = pygame.font.SysFont("Verdana", 24, bold=True)
         self.large_font = pygame.font.SysFont("Verdana", 50, bold=True)
         
-        self.key_states = {pygame.K_UP: False, pygame.K_DOWN: False}
+        self.last_input_state = {"gas": False, "brake": False}
+        self.gas_value = 0.0
+        self.brake_value = 0.0
+        self.sensor_shm = None
+
+        if HAS_SENSOR:
+            try:
+                self.sensor_shm = SensorSharedMemory(path="/home", project_id='R')
+                self.sensor_shm.connect()
+                print("Rhythm: Connected to Hardware via Shared Memory.")
+            except Exception as e:
+                print(f"Rhythm: Hardware connection failed: {e}")
+                self.sensor_shm = None
+        else:
+            print("Rhythm: Running with keyboard fallback only.")
+        
         self.load_assets()
         self.reset_game()
 
@@ -184,23 +211,82 @@ class Game:
 
     def handle_input(self):
         current_time = pygame.time.get_ticks() - self.start_ticks if self.music_started else 0
+
+        # 1. Collect input states: Hardware samples + Keyboard fallback
+
+        keys = pygame.key.get_pressed()
+        keyboard_gas = keys[pygame.K_UP]
+        keyboard_brake = keys[pygame.K_DOWN]
+
+        # Default values from keyboard
+        self.gas_value = 1.0 if keyboard_gas else 0.0
+        self.brake_value = 1.0 if keyboard_brake else 0.0
+
+        # Temporary calibration values
+        GAS_MIN = 0
+        GAS_MAX = 4095
+        BRAKE_MIN = 0
+        BRAKE_MAX = 4095
+
+        GAS_THRESHOLD = 0.15
+        BRAKE_THRESHOLD = 0.15
+
+        def normalize_sensor(raw_value, min_value, max_value):
+            if max_value == min_value:
+                return 0.0
+
+            value = (raw_value - min_value) / (max_value - min_value)
+            return max(0.0, min(1.0, value))
+
+        # Hardware polling from Shared Memory
+        if self.sensor_shm:
+            try:
+                data = self.sensor_shm.read_data()
+
+                # load_cell  -> brake force
+                # hall_effect -> gas pedal position
+                raw_brake = data["load_cell"]["sample"]
+                raw_gas = data["hall_effect"]["sample"]
+
+                self.gas_value = normalize_sensor(raw_gas, GAS_MIN, GAS_MAX)
+                self.brake_value = normalize_sensor(raw_brake, BRAKE_MIN, BRAKE_MAX)
+
+                # Keyboard still overrides hardware for testing
+                if keyboard_gas:
+                    self.gas_value = 1.0
+                if keyboard_brake:
+                    self.brake_value = 1.0
+
+            except Exception as e:
+                print(f"Sensor read error: {e}")
+
+        gas_pressed = self.gas_value > GAS_THRESHOLD
+        brake_pressed = self.brake_value > BRAKE_THRESHOLD
+
+        # 2. Edge Detection for rhythm hits
+
+        if gas_pressed and not self.last_input_state["gas"]:
+            self.check_hit(current_time, 1)
+
+        if brake_pressed and not self.last_input_state["brake"]:
+            self.check_hit(current_time, -1)
+
+        self.last_input_state = {"gas": gas_pressed, "brake": brake_pressed}
+
+        # 3. Handle system events
+
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: self.running = False
+            if event.type == pygame.QUIT:
+                self.running = False
+
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE: self.running = False
-                if event.key == pygame.K_UP and not self.key_states[pygame.K_UP]:
-                    self.key_states[pygame.K_UP] = True
-                    self.check_hit(current_time, 1)
-                if event.key == pygame.K_DOWN and not self.key_states[pygame.K_DOWN]:
-                    self.key_states[pygame.K_DOWN] = True
-                    self.check_hit(current_time, -1)
-            if event.type == pygame.KEYUP:
-                if event.key in self.key_states: self.key_states[event.key] = False
+                if event.key == pygame.K_ESCAPE:
+                    self.running = False
 
     def check_hit(self, current_time, input_type):
         if not self.music_started: return
         
-        # Re-catch logic
+        # Re-catch logic for hold notes
         active_holds = [n for n in self.notes if n.hit and not n.hold_completed and n.type == input_type and n.duration > 0]
         if active_holds:
             if not active_holds[0].is_holding:
@@ -232,7 +318,10 @@ class Game:
 
     def update(self):
         current_time = pygame.time.get_ticks() - self.start_ticks if self.music_started else 0
-        keys = pygame.key.get_pressed()
+        
+        # Current input state for hold logic
+        gas_now = self.last_input_state["gas"]
+        brake_now = self.last_input_state["brake"]
 
         for note in self.notes:
             note.update_position(current_time)
@@ -242,7 +331,9 @@ class Game:
                 self.trigger_miss(note)
 
             if note.hit and note.duration > 0 and not note.hold_completed:
-                pedal_down = (keys[pygame.K_UP] if note.type == 1 else keys[pygame.K_DOWN])
+                # Use consolidated input state
+                pedal_down = gas_now if note.type == 1 else brake_now
+                
                 if pedal_down:
                     note.is_holding = True
                     note.release_time = 0
@@ -329,11 +420,18 @@ class Game:
     def run(self):
         while self.running:
             self.handle_input()
-            if not self.music_started and (self.key_states[pygame.K_UP] or self.key_states[pygame.K_DOWN]):
+            hardware_start = self.last_input_state["gas"] or self.last_input_state["brake"]
+            if not self.music_started and hardware_start:
                 pygame.mixer.music.play(); self.start_ticks = pygame.time.get_ticks(); self.music_started = True
             self.update()
             self.draw()
             self.clock.tick(FPS)
+        
+        # Cleanup before quit
+        if hasattr(self, 'sensor_shm') and self.sensor_shm:
+            self.sensor_shm.detach()
+            print("Rhythm: Detached from Shared Memory.")
+            
         pygame.quit()
 
 if __name__ == "__main__":
