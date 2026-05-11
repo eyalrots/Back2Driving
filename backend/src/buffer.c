@@ -37,8 +37,10 @@ ret:
 
 int read_hx711_data(int handle, uint32_t *rx_buffer)
 {
-    if (!rx_buffer)
+    if (!rx_buffer) {
+		printf("Buffer is null on load cell.\n");
         return -1;
+	}
     struct sched_param param;
     int status = 0;
     int i = 0;
@@ -46,6 +48,7 @@ int read_hx711_data(int handle, uint32_t *rx_buffer)
 
     /* Setup priority and GPIO pins */
     if (setup_and_check(handle) < 0) {
+		printf("Setup failed on load cell.\n");
         status = -1;
         goto ret;
 	}
@@ -66,7 +69,13 @@ int read_hx711_data(int handle, uint32_t *rx_buffer)
 
         /* Shift the data variable by 1 to make room */
         /* Then read the Dout pin and append it to the rightmost bit */
-        (*rx_buffer) = ((*rx_buffer) << 1) | lgGpioRead(handle, DOUT_PIN);
+		int val = lgGpioRead(handle, DOUT_PIN);
+		if (val < 0) {
+			printf("GPIO READ ERROR CODE: %d\n", val);
+			return -1;
+		}
+        (*rx_buffer) = ((*rx_buffer) << 1) | val;
+		// printf("buffer is: 0x%06X on clk number %d\n", *rx_buffer, i);
 
         /* Pulse clk low */
         status = lgGpioWrite(handle, SCK_PIN, 0);

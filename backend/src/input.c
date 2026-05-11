@@ -87,7 +87,7 @@ int inner_loop_spi(uint8_t *tx_buf, uint8_t *rx_buf, int handle)
     sample_val = ((uint8_t)rx_buf[1] & RX_HIGH_4);
     sample_val = (sample_val << 8) + ((uint8_t)rx_buf[2] & RX_LOW_8);
 ret:
-    return status;
+    return sample_val;
 }
 
 int get_spi_data(int handle, shared_data_t *shared_data)
@@ -107,22 +107,26 @@ int get_spi_data(int handle, shared_data_t *shared_data)
             return -1;
         /* NOTE: take time stump */
         writer_2(shared_data, &hall_effect_data);
+		printf("hall: %d :: ", shared_data->hall_effect_sensor.sample);
+		sleep(1);
 	}
 }
 
 int get_hx711_data(int handle, shared_data_t *shared_data)
 {
-    if (!shared_data || !handle)
+    if (!shared_data) {
         return -1;
+	}
 
     sensor_data_t load_cell_data;
     memset(&load_cell_data, 0, sizeof(load_cell_data));
-
     while (1) {
         if (read_hx711_data(handle, &(load_cell_data.sample)) == -1)
             return -1;
         /* NOTE: take time stump */
         writer_1(shared_data, &load_cell_data);
+		printf("Laod: %d\n", load_cell_data.sample);
+		sleep(1);
     }
 
     return 0;

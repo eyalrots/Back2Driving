@@ -34,8 +34,10 @@ void *hx711_thread_func(void *arg)
 
     /* Get samples in infinite loop */
     printf("Starting sampling Load-Cell...\n");
-    if (get_hx711_data(hx711_handle, shared_data) == -1)
+    if (get_hx711_data(hx711_handle, shared_data) == -1) {
+		printf("Failed Sampling Load Cell.\n");
         return NULL;
+	}
 
     /* destroy shared memory */
     destroy(shared_data);
@@ -62,48 +64,48 @@ int main(void)
     printf("Setup Complete.\n");
 
 	// Initialize our two independent buttons
-    ButtonState button_1 = {BUTTON_1, 0, 0.0};
-    ButtonState button_2 = {BUTTON_2, 0, 0.0};
+    // ButtonState button_1 = {BUTTON_1, 0, 0.0};
+    // ButtonState button_2 = {BUTTON_2, 0, 0.0};
 
-	setup_button(gpio_handle, &button_1);
-	setup_button(gpio_handle, &button_2);
+	// setup_button(gpio_handle, &button_1);
+	// setup_button(gpio_handle, &button_2);
     
-    // /* Create two threads for spi and hx711 */
-    // if (pthread_create(&spi_thread, NULL, spi_thread_func,
-    //                    (void *)&spi_handle)) {
-    //     perror("Error: Failed to create SPI thread.\n");
-    // }
-    // if (pthread_create(&hx711_thread, NULL, hx711_thread_func,
-    //                    (void *)&gpio_handle)) {
-    //     perror("Error: Failed to create HX711 thread.\n");
-    // }
-    // printf("Created Threads Successfuly.\n");
+    /* Create two threads for spi and hx711 */
+    if (pthread_create(&spi_thread, NULL, spi_thread_func,
+                       (void *)&spi_handle)) {
+        perror("Error: Failed to create SPI thread.\n");
+    }
+    if (pthread_create(&hx711_thread, NULL, hx711_thread_func,
+                       (void *)&gpio_handle)) {
+        perror("Error: Failed to create HX711 thread.\n");
+    }
+    printf("Created Threads Successfuly.\n");
 
-    // /* Join Created threads */
-    // if (pthread_join(spi_thread, NULL)) {
-    //     perror("Error: Failed to joid SPI thread.\n");
-    // }
-    // if (pthread_join(hx711_thread, NULL)) {
-    //     perror("Error: Failed to join HX711 thread.\n");
-    // }
-    // printf("Joined Threads Successfuly.\n");
+    /* Join Created threads */
+    if (pthread_join(spi_thread, NULL)) {
+        perror("Error: Failed to joid SPI thread.\n");
+    }
+    if (pthread_join(hx711_thread, NULL)) {
+        perror("Error: Failed to join HX711 thread.\n");
+    }
+    printf("Joined Threads Successfuly.\n");
 
     shared_data_t *shared_data = NULL;
 
-    /* Create or connect to shared memory */
-    create_or_connect(&shared_data);
-    if (!shared_data)
-        return 1;
+    // /* Create or connect to shared memory */
+    // create_or_connect(&shared_data);
+    // if (!shared_data)
+    //     return 1;
 
-	while(1) {
-		sleep(1);
-	}
+	// while(1) {
+	// 	sleep(1);
+	// }
 	
-    /* destroy shared memory */
-    destroy(shared_data);
-	printf("Finished sampling Buttons.\n");
+    // /* destroy shared memory */
+    // destroy(shared_data);
+	// printf("Finished sampling Buttons.\n");
 
-    return 0;
+    // return 0;
 }
 
 // int main(void)
