@@ -352,17 +352,19 @@ class GameScreen(QWidget):
         brake_value = 1.0 if keyboard_brake else 0.0
 
         # Temporary calibration values
-        GAS_MIN = 0
-        GAS_MAX = 4095
+        GAS_MIN = 2122
+        GAS_MAX = 3200
         BRAKE_MIN = 0
-        BRAKE_MAX = 4095
+        BRAKE_MAX = 8388608
 
         def normalize_sensor(raw_value, min_value, max_value):
             if max_value == min_value:
                 return 0.0
 
+            if (raw_value < 0):
+                raw_value  = -raw_value
             value = (raw_value - min_value) / (max_value - min_value)
-            return max(0.0, min(1.0, value))
+            return value
 
         # Hardware reading from Shared Memory
         if self.sensor_shm:
@@ -373,15 +375,16 @@ class GameScreen(QWidget):
                 # hall_effect -> gas pedal position
                 raw_brake = data["load_cell"]["sample"]
                 raw_gas = data["hall_effect"]["sample"]
+                print(f"gas: {raw_gas} :: brake: {raw_brake}\n")
 
                 gas_value = normalize_sensor(raw_gas, GAS_MIN, GAS_MAX)
                 brake_value = normalize_sensor(raw_brake, BRAKE_MIN, BRAKE_MAX)
 
                 # Keyboard can still override for testing
-                if keyboard_gas:
-                    gas_value = 1.0
-                if keyboard_brake:
-                    brake_value = 1.0
+                # if keyboard_gas:
+                #     gas_value = 1.0
+                # if keyboard_brake:
+                #     brake_value = 1.0
 
             except Exception as e:
                 print(f"Sensor read error: {e}")

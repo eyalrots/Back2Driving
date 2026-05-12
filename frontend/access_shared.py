@@ -18,7 +18,7 @@ class SensorSharedMemory:
         # hall_effect_sensor (sample, time_stump) -> I, I
         # flags[2] -> i, i
         # turn -> i
-        self.struct_format = 'IIIIiii'
+        self.struct_format = 'iiiiiii'
         self.struct_size = struct.calcsize(self.struct_format)
         self.shm = None
 
