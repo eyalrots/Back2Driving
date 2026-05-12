@@ -223,10 +223,10 @@ class Game:
         self.brake_value = 1.0 if keyboard_brake else 0.0
 
         # Temporary calibration values
-        GAS_MIN = 0
-        GAS_MAX = 4095
+        GAS_MIN = 2122
+        GAS_MAX = 3200
         BRAKE_MIN = 0
-        BRAKE_MAX = 4095
+        BRAKE_MAX = 8388608
 
         GAS_THRESHOLD = 0.15
         BRAKE_THRESHOLD = 0.15
@@ -252,10 +252,10 @@ class Game:
                 self.brake_value = normalize_sensor(raw_brake, BRAKE_MIN, BRAKE_MAX)
 
                 # Keyboard still overrides hardware for testing
-                if keyboard_gas:
-                    self.gas_value = 1.0
-                if keyboard_brake:
-                    self.brake_value = 1.0
+                # if keyboard_gas:
+                #     self.gas_value = 1.0
+                # if keyboard_brake:
+                #     self.brake_value = 1.0
 
             except Exception as e:
                 print(f"Sensor read error: {e}")
