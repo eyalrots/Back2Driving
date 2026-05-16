@@ -64,10 +64,10 @@ int main(void)
     printf("Setup Complete.\n");
 
 	// Initialize our two independent buttons
-    // ButtonState button_1 = {BUTTON_1, 0, 0.0};
+    ButtonState button_1 = {BUTTON_1, 0, 0.0};
     // ButtonState button_2 = {BUTTON_2, 0, 0.0};
 
-	// setup_button(gpio_handle, &button_1);
+	setup_button(gpio_handle, &button_1);
 	// setup_button(gpio_handle, &button_2);
     
     /* Create two threads for spi and hx711 */

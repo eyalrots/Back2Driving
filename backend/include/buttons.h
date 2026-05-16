@@ -14,12 +14,12 @@ typedef struct {
 } ButtonState;
 
 /* Byttons */
-#define BUTTON_1 17
+#define BUTTON_1 25
 #define BUTTON_2 27
 
 int buttons_main_operation();
 void buttons_check_operation();
 int setup_button(int handle, ButtonState *btn);
-int register_press(ButtonState *btn);
+int register_press(ButtonState *btn, int dir);
 
 #endif

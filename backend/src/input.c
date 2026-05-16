@@ -125,7 +125,7 @@ int get_hx711_data(int handle, shared_data_t *shared_data)
             return -1;
         /* NOTE: take time stump */
         writer_1(shared_data, &load_cell_data);
-		printf("Laod: %d\n", load_cell_data.sample);
+		printf("Laod: %d :: falg: %d\n", load_cell_data.sample, shared_data->flags[0]);
 		sleep(1);
     }
 

@@ -17,6 +17,7 @@ void button_callback(int e, lgGpioAlert_p alerts, void *userdata) {
         if (level == 1) {
             // BUTTON PRESSED
             btn->press_start_time = timestamp;
+			register_press(btn, 1);
             printf("GPIO %d pressed.\n", btn->pin); // Optional debug
 
         } else if (level == 0) {
@@ -31,13 +32,13 @@ void button_callback(int e, lgGpioAlert_p alerts, void *userdata) {
                 
                 // -> Call your system operation function here <-
                 // Example: operate_system(btn->pin, btn->last_press_duration_ms);
-				register_press(btn);
+				register_press(btn, 0);
             }
         }
     }
 }
 
-int register_press(ButtonState *btn) {
+int register_press(ButtonState *btn, int dir) {
 	if (!btn)
 		return -1;
 
@@ -50,21 +51,25 @@ int register_press(ButtonState *btn) {
     if (!shared_data)
         return -1;
 
-	sensor_data_t btn_data = {};
+	// sensor_data_t btn_data = {};
 
-	btn_data.sample = btn->last_press_duration_ms;
-	btn_data.time_stump = btn->press_start_time;
+	// btn_data.sample = btn->last_press_duration_ms;
+	// btn_data.time_stump = btn->press_start_time;
+
+	// if (btn->pin == BUTTON_1) {
+	// 	printf("registering on button 1.\n");
+	// 	writer_1(shared_data, &btn_data);
+	// } else if (btn->pin == BUTTON_2) {
+	// 	writer_2(shared_data, &btn_data);
+	// 	printf("registering on button 2.\n");
+	// }
 
 	if (btn->pin == BUTTON_1) {
-		printf("registering on button 1.\n");
-		writer_1(shared_data, &btn_data);
-	} else if (btn->pin == BUTTON_2) {
-		writer_2(shared_data, &btn_data);
-		printf("registering on button 2.\n");
+		shared_data->flags[0] = dir;
 	}
 
-	printf("Press registered.\n");
-	printf("Button 1: %d :: Button 2: %d.\n", shared_data->load_cell_sensor.sample, shared_data->hall_effect_sensor.sample);
+	printf("Press registered: %d.\n", shared_data->flags[0]);
+	//printf("Button 1: %d :: Button 2: %d.\n", shared_data->load_cell_sensor.sample, shared_data->hall_effect_sensor.sample);
 
 	return 0;
 }
