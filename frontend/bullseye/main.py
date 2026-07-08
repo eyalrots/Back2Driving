@@ -2,6 +2,7 @@ import sys
 import random
 import time
 import os
+import subprocess  # Added for spawning the C backend
 from datetime import datetime
 import pygame  # For Clinical Audio Feedback
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QStackedWidget, QWidget, 
@@ -23,7 +24,6 @@ except ImportError as e:
     print(f"Warning: Shared memory is not available. Falling back to keyboard. ({e})")
 
 # --- CONSTANTS & CONFIG ---
-# ... (rest of constants)
 WIDTH = 800
 HEIGHT = 600
 FPS = 60
@@ -215,8 +215,6 @@ class GameScreen(QWidget):
     finished_signal = pyqtSignal(dict)
     def __init__(self):
         super().__init__()
-        # Import inside __init__ as requested
-        #from access_shared import SensorSharedMemory
         
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -226,13 +224,24 @@ class GameScreen(QWidget):
         self.layout.addWidget(self.view)
         self.view.key_signal.connect(self.handle_keyboard_input)
         
-        # Initialize Shared Memory with specific parameters
-        # Raspberry Pi / Linux: use hardware shared memory
-        # Windows / development computer: keyboard fallback only
         self.sensor_shm = None
+        self.c_process = None  # Track the background C process
 
         if HAS_SENSOR:
             try:
+                # 1. Spawn the C program in the background
+                # CHANGE THIS to the actual path of your compiled C program
+                c_executable_path = "/home/project/Project/Back2Driving/backend/backend" 
+                self.c_process = subprocess.Popen(
+                    ["sudo", c_executable_path],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                
+                # 2. Give the C program a moment to initialize the shared memory
+                time.sleep(0.5)
+                
+                # 3. Connect to the newly created shared memory
                 self.sensor_shm = SensorSharedMemory(path="/home", project_id='R')
                 self.sensor_shm.connect()
                 print("Bullseye: Connected to Hardware via Shared Memory.")
@@ -245,7 +254,6 @@ class GameScreen(QWidget):
         self.gas_value = 0.0
         self.brake_value = 0.0
         
-
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_game)
         self.countdown_timer = QTimer()
@@ -343,53 +351,39 @@ class GameScreen(QWidget):
             return
 
         # 1. Read Inputs: Hardware samples + Keyboard fallback
-
         keyboard_gas = any(k in self.keys_pressed for k in [Qt.Key.Key_Up, 16777235])
         keyboard_brake = any(k in self.keys_pressed for k in [Qt.Key.Key_Down, 16777237])
 
-        # Default values: keyboard mode
         gas_value = 1.0 if keyboard_gas else 0.0
         brake_value = 1.0 if keyboard_brake else 0.0
 
-        # Temporary calibration values
-        GAS_MIN = 2122
-        GAS_MAX = 3200
-        BRAKE_MIN = 0
+        GAS_MIN = 2600
+        GAS_MAX = 35000
+        BRAKE_MIN = 56000
         BRAKE_MAX = 8388608
 
         def normalize_sensor(raw_value, min_value, max_value):
             if max_value == min_value:
                 return 0.0
-
             if (raw_value < 0):
                 raw_value  = -raw_value
             value = (raw_value - min_value) / (max_value - min_value)
             return value
 
-        # Hardware reading from Shared Memory
         if self.sensor_shm:
             try:
                 data = self.sensor_shm.read_data()
-
-                # load_cell  -> brake force
-                # hall_effect -> gas pedal position
                 raw_brake = data["load_cell"]["sample"]
                 raw_gas = data["hall_effect"]["sample"]
-                print(f"gas: {raw_gas} :: brake: {raw_brake}\n")
+                
+                # Commenting out the print to prevent spamming the console 60 times a second
+                # print(f"gas: {raw_gas} :: brake: {raw_brake}\n")
 
                 gas_value = normalize_sensor(raw_gas, GAS_MIN, GAS_MAX)
                 brake_value = normalize_sensor(raw_brake, BRAKE_MIN, BRAKE_MAX)
-
-                # Keyboard can still override for testing
-                # if keyboard_gas:
-                #     gas_value = 1.0
-                # if keyboard_brake:
-                #     brake_value = 1.0
-
             except Exception as e:
-                print(f"Sensor read error: {e}")
+                pass # Fail silently so the game doesn't crash on a missed read
 
-        # Thresholds: from continuous values to pressed/not pressed
         GAS_THRESHOLD = 0.15
         BRAKE_THRESHOLD = 0.15
 
@@ -397,7 +391,6 @@ class GameScreen(QWidget):
         brake_pressed = brake_value > BRAKE_THRESHOLD
 
         # 2. Process Clinical Metrics - Edge Detection
-
         if brake_pressed and not self.last_input_state["brake"]:
             if self.active_target_spawn_time and not self.has_braked_for_current_target:
                 self.reaction_times.append(time.time() - self.active_target_spawn_time)
@@ -413,7 +406,6 @@ class GameScreen(QWidget):
         self.last_input_state = {"gas": gas_pressed, "brake": brake_pressed}
 
         # 3. Apply Speed using continuous gas/brake values
-
         self.player.set_braking(brake_pressed)
 
         if gas_value > 0.05:
@@ -429,7 +421,6 @@ class GameScreen(QWidget):
         self.current_speed = max(0, min(self.current_speed, self.config["MAX_SPEED"]))
 
         # 4. Move environment
-
         for p in self.grass_patches:
             p.setY(p.y() + self.current_speed)
             if p.y() > HEIGHT:
@@ -441,7 +432,6 @@ class GameScreen(QWidget):
                 line.setY(line.y() - 850)
 
         # 5. Move targets and check scoring
-
         for t in self.targets[:]:
             t.setY(t.y() + self.current_speed)
 
@@ -497,7 +487,6 @@ class GameScreen(QWidget):
                 self.spawn_target(random.randint(dist[0], dist[1]))
 
         # 6. Update HUD
-
         self.speed_text.setPlainText(f"SPEED: {int(self.current_speed * 6)} km/h")
 
     def clear_msg(self):
@@ -509,6 +498,12 @@ class GameScreen(QWidget):
         self.timer.stop()
         self.countdown_timer.stop()
         play_sound(GAMEOVER_SOUND)
+        
+        # Cleanup: Terminate the C backend process cleanly so it doesn't run indefinitely
+        if self.c_process:
+            self.c_process.terminate()
+            self.c_process.wait() # Ensure it actually closes
+            
         avg_rt = sum(self.reaction_times) / len(self.reaction_times) if self.reaction_times else 0
         avg_ptt = sum(self.ptt_times) / len(self.ptt_times) if self.ptt_times else 0
         stats = {"time": datetime.now().strftime("%Y-%m-%d %H:%M"), "name": self.patient_name,

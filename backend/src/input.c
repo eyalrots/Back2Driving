@@ -75,8 +75,9 @@ int inner_loop_spi(uint8_t *tx_buf, uint8_t *rx_buf, int handle)
 
     /* Transfer 3 bytes simultaneously */
     status = lgSpiXfer(handle, (const char *)tx_buf, (char *)rx_buf, 3);
+    
     if (status < 0) {
-        printf("Error transfering data on SPI (handle-%d): %s\n", handle, lguErrorText(status));
+	printf("SPI Access Failed.\n");
         goto ret;
     }
 
@@ -100,15 +101,15 @@ int get_spi_data(int handle, shared_data_t *shared_data)
     uint8_t rx_buf[3] = {0, 0, 0};
     sensor_data_t hall_effect_data;
     memset(&hall_effect_data, 0, sizeof(hall_effect_data));
-
+    
     while (1) {
         hall_effect_data.sample = inner_loop_spi(tx_buf, rx_buf, handle);
         if ((int)hall_effect_data.sample == -1)
             return -1;
         /* NOTE: take time stump */
         writer_2(shared_data, &hall_effect_data);
-		printf("hall: %d :: ", shared_data->hall_effect_sensor.sample);
-		sleep(1);
+		// printf("hall: %d :: ", shared_data->hall_effect_sensor.sample);
+		// sleep(1);
 	}
 }
 
@@ -117,16 +118,19 @@ int get_hx711_data(int handle, shared_data_t *shared_data)
     if (!shared_data) {
         return -1;
 	}
-
+	
     sensor_data_t load_cell_data;
     memset(&load_cell_data, 0, sizeof(load_cell_data));
     while (1) {
-        if (read_hx711_data(handle, &(load_cell_data.sample)) == -1)
+        if (read_hx711_data(handle, &(load_cell_data.sample)) == -1) {
+			printf("Read HX711 Failed.\n");
             return -1;
+		}
+		
         /* NOTE: take time stump */
         writer_1(shared_data, &load_cell_data);
-		printf("Laod: %d :: falg: %d\n", load_cell_data.sample, shared_data->flags[0]);
-		sleep(1);
+		// printf("Laod: %d :: falg: %d\n", load_cell_data.sample, shared_data->flags[0]);
+		// sleep(1);
     }
 
     return 0;

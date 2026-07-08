@@ -61,14 +61,14 @@ int main(void)
 		printf("Error opening GPIO or SPI.\n");
     	return 0;
     }
-    printf("Setup Complete.\n");
+    printf("Setup  Complete.\n");
 
 	// Initialize our two independent buttons
     ButtonState button_1 = {BUTTON_1, 0, 0.0};
-    // ButtonState button_2 = {BUTTON_2, 0, 0.0};
+    ButtonState button_2 = {BUTTON_2, 0, 0.0};
 
 	setup_button(gpio_handle, &button_1);
-	// setup_button(gpio_handle, &button_2);
+	setup_button(gpio_handle, &button_2);
     
     /* Create two threads for spi and hx711 */
     if (pthread_create(&spi_thread, NULL, spi_thread_func,
@@ -105,7 +105,7 @@ int main(void)
     // destroy(shared_data);
 	// printf("Finished sampling Buttons.\n");
 
-    // return 0;
+    return 0;
 }
 
 // int main(void)

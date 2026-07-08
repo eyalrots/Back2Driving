@@ -18,7 +18,7 @@ void button_callback(int e, lgGpioAlert_p alerts, void *userdata) {
             // BUTTON PRESSED
             btn->press_start_time = timestamp;
 			register_press(btn, 1);
-            printf("GPIO %d pressed.\n", btn->pin); // Optional debug
+            //printf("GPIO %d pressed.\n", btn->pin); // Optional debug
 
         } else if (level == 0) {
             // BUTTON RELEASED
@@ -26,7 +26,7 @@ void button_callback(int e, lgGpioAlert_p alerts, void *userdata) {
                 uint64_t duration_ns = timestamp - btn->press_start_time;
                 btn->last_press_duration_ms = (double)duration_ns / 1000000.0;
                 
-                printf("GPIO %d released! Duration: %.2f ms\n", btn->pin, btn->last_press_duration_ms);
+                //printf("GPIO %d released! Duration: %.2f ms\n", btn->pin, btn->last_press_duration_ms);
                 
                 btn->press_start_time = 0; // Reset for next press
                 
@@ -42,7 +42,7 @@ int register_press(ButtonState *btn, int dir) {
 	if (!btn)
 		return -1;
 
-	printf("registering press...\n");
+	//printf("registering press...\n");
 
 	shared_data_t *shared_data = NULL;
 
@@ -66,9 +66,11 @@ int register_press(ButtonState *btn, int dir) {
 
 	if (btn->pin == BUTTON_1) {
 		shared_data->flags[0] = dir;
+	} else if (btn->pin == BUTTON_2) {
+		shared_data->flags[1] = dir;
 	}
 
-	printf("Press registered: %d.\n", shared_data->flags[0]);
+	//printf("Press registered: %d.\n", shared_data->flags[0]);
 	//printf("Button 1: %d :: Button 2: %d.\n", shared_data->load_cell_sensor.sample, shared_data->hall_effect_sensor.sample);
 
 	return 0;
@@ -106,14 +108,14 @@ int buttons_main_operation() {
     setup_button(handle, &button_1);
     setup_button(handle, &button_2);
 
-    printf("System ready. Press buttons simultaneously or independently...\n");
+    //printf("System ready. Press buttons simultaneously or independently...\n");
 
     // Main system loop
     while (1) {
         sleep(1);
         
         // Example: The main thread can independently read the latest values at any time
-        printf("Current stored durations - B1: %.2fms, B2: %.2fms\n", 
+        //printf("Current stored durations - B1: %.2fms, B2: %.2fms\n", 
                button_1.last_press_duration_ms, button_2.last_press_duration_ms);
     }
 
@@ -125,9 +127,9 @@ void buttons_on_press(int e, lgGpioAlert_p evt, void *userdata)
 {
     int i = 0;
     for (i = 0; i < e; i++) {
-        printf("t=%" PRIu64 " c=%d g=%d l=%d f=%d (%d of %d)\n",
-               evt[i].report.timestamp, evt[i].report.chip, evt[i].report.gpio,
-               evt[i].report.level, evt[i].report.flags, i + 1, e);
+        // printf("t=%" PRIu64 " c=%d g=%d l=%d f=%d (%d of %d)\n",
+        //        evt[i].report.timestamp, evt[i].report.chip, evt[i].report.gpio,
+        //        evt[i].report.level, evt[i].report.flags, i + 1, e);
     }
 }
 
