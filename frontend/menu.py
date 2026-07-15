@@ -24,6 +24,7 @@ SENSOR_EXE_PATH = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "backend", "bac
 def kill_sensor_backend():
     print("Terminating sensor backend...")
     try:
+        # Restored 'sudo' to guarantee the root process is terminated
         subprocess.run(["sudo", "pkill", "-x", "backend"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as e:
         print(f"Error terminating backend: {e}")
@@ -32,7 +33,7 @@ def kill_sensor_backend():
 GAMES = [
     {"title": "Bullseye Braking", "path": "bullseye/light_main.py"},
     {"title": "Rhythm Drive", "path": "bullseye/rhythm.py"},
-    {"title": "Quit to Terminal", "path": None}
+    {"title": "Power Off Device", "path": None} 
 ]
 
 GLOBAL_STYLESHEET = """
@@ -56,6 +57,7 @@ class MainMenuApp(QMainWindow):
         
         # --- LAUNCH C BACKEND ---
         if HAS_SENSOR and os.path.exists(SENSOR_EXE_PATH):
+            # Restored 'sudo' for bit-banging timing and memory access
             subprocess.Popen(["sudo", SENSOR_EXE_PATH], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(0.5)
         
@@ -81,7 +83,7 @@ class MainMenuApp(QMainWindow):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.addWidget(title)
         
-        instructions = QLabel("GREEN Button: Select Game  |  YELLOW Button: Scroll List")
+        instructions = QLabel("GREEN: Select Game  |  YELLOW: Scroll List\n(Hold BOTH to Force Quit to Terminal)")
         instructions.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
         instructions.setStyleSheet("color: #AAAAAA; margin-bottom: 40px;")
         instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -101,8 +103,16 @@ class MainMenuApp(QMainWindow):
         self.showFullScreen()
         self.setCursor(Qt.CursorShape.BlankCursor)
         
+        # --- STATE MACHINE VARIABLES ---
         self.prev_green = False
         self.prev_yellow = False
+        self.dual_hold_counter = 0 
+        
+        # Masking flags for interrupt handling
+        self.first_poll = True
+        self.mask_green_stale = False
+        self.mask_yellow_stale = False
+        
         self.poll_timer = QTimer()
         self.poll_timer.timeout.connect(self.poll_hardware_buttons)
         self.poll_timer.start(50) 
@@ -116,24 +126,55 @@ class MainMenuApp(QMainWindow):
 
     def poll_hardware_buttons(self):
         if not self.sensor_shm: return
+
         try:
             data = self.sensor_shm.read_data()
             if "sync" in data and "flags" in data["sync"]:
-                green_pressed = int(data["sync"]["flags"][0]) == 1
-                yellow_pressed = int(data["sync"]["flags"][1]) == 1
+                raw_green = int(data["sync"]["flags"][0]) == 1
+                raw_yellow = int(data["sync"]["flags"][1]) == 1
+                
+                # --- 1. STALE EDGE MASKING ---
+                if self.first_poll:
+                    self.mask_green_stale = raw_green
+                    self.mask_yellow_stale = raw_yellow
+                    self.first_poll = False
+                    if raw_green or raw_yellow:
+                        print("Stale memory detected. Masking buttons until physical release.")
+
+                if self.mask_green_stale and not raw_green:
+                    self.mask_green_stale = False
+                if self.mask_yellow_stale and not raw_yellow:
+                    self.mask_yellow_stale = False
+
+                green_pressed = raw_green and not self.mask_green_stale
+                yellow_pressed = raw_yellow and not self.mask_yellow_stale
+                
+                # --- 2. DUAL BUTTON HOLD DETECTION ---
+                if green_pressed and yellow_pressed:
+                    self.dual_hold_counter += 1
+                    if self.dual_hold_counter >= 20: 
+                        self.quit_to_terminal()
+                        self.dual_hold_counter = 0
+                    return 
+                else:
+                    self.dual_hold_counter = 0 
+                    
+                # --- 3. SINGLE BUTTON ACTIONS ---
                 if yellow_pressed and not self.prev_yellow:
                     self.current_index = (self.current_index + 1) % len(GAMES)
                     self.update_ui()
                 elif green_pressed and not self.prev_green:
                     self.launch_selected()
+                    
                 self.prev_green = green_pressed
                 self.prev_yellow = yellow_pressed
-        except Exception: pass
+        except Exception as e: 
+            print(f"Hardware Poll Error: {e}") 
 
     def launch_selected(self):
         selected_item = GAMES[self.current_index]
         if selected_item["path"] is None:
-            self.shutdown()
+            self.shutdown() 
         else:
             self.poll_timer.stop()
             self.hide()
@@ -149,16 +190,32 @@ class MainMenuApp(QMainWindow):
             self.prev_yellow = True
             self.poll_timer.start(50)
 
-    def shutdown(self):
-        # --- SHOW CURSOR AGAIN BEFORE EXIT ---
-        os.system("setterm -cursor on > /dev/tty1")
-        
+    def quit_to_terminal(self):
+        print("Forcing exit to terminal...")
         self.poll_timer.stop()
+        kill_sensor_backend()
+        
+        os.system("sudo kbd_mode -a")
+        os.system("setterm -cursor on > /dev/tty1")
+        os.system("stty sane")
+        os.system("reset")
+        
+        subprocess.run(["sudo", "systemctl", "start", "getty@tty1.service"])
+        subprocess.run(["sudo", "systemctl", "stop", "driving-menu.service"])
+        
         QApplication.quit()
+        sys.exit(0)
+
+    def shutdown(self):
+        print("Initiating full system shutdown...")
+        os.system("setterm -cursor on > /dev/tty1")
+        self.poll_timer.stop()
         kill_sensor_backend()
         os.system("stty sane")
         os.system("reset")
+        
         subprocess.run(["sudo", "systemctl", "poweroff"])
+        QApplication.quit()
         sys.exit(0)
 
 if __name__ == "__main__":

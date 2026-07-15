@@ -27,6 +27,10 @@ WIDTH = 1066
 HEIGHT = 600
 FPS = 60
 
+MIN_BRAKE = 40000
+MAX_BRAKE = 215000
+MIN_GAS = 2600
+
 # Dashboard Aesthetic Colors
 BLACK = QColor(18, 18, 21)
 ASPHALT = QColor(30, 30, 35)
@@ -213,11 +217,20 @@ class MainMenu(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
         
-        instructions = QLabel("GREEN: START  |  YELLOW: QUIT")
+        instructions = QLabel("GREEN: START  |  YELLOW: QUIT\nTAP GAS: Calibrate Threshold")
         instructions.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         instructions.setStyleSheet("color: #888899;")
         instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(instructions)
+        
+        self.thresh_label = QLabel("BRAKE THRESHOLD: 0.1")
+        self.thresh_label.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        self.thresh_label.setStyleSheet("color: #FFC832;")
+        self.thresh_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.thresh_label)
+
+    def update_threshold_display(self, val):
+        self.thresh_label.setText(f"BRAKE THRESHOLD: {val:.1f}")
 
 class GameScreen(QWidget):
     finished_signal = pyqtSignal(dict)
@@ -232,6 +245,13 @@ class GameScreen(QWidget):
         
         self.sensor_shm = sensor_shm
         self.last_input_state = {"gas": False, "brake": False}
+        
+        # Initial Calibration Baselines
+        self.brake_min = 30000
+        self.brake_max = 80000
+        self.gas_min = 2650
+        self.gas_max = 3500
+        self.active_brake_threshold = 0.1
         
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_game)
@@ -284,7 +304,6 @@ class GameScreen(QWidget):
         hit_line.setPen(QPen(Qt.PenStyle.NoPen))
         self.scene.addItem(hit_line)
 
-        # Hardware Diagnostic Indicators (Flipped positions)
         self.brake_ind_bg = QGraphicsRectItem(20, HEIGHT - 50, 150, 30)
         self.brake_ind_bg.setBrush(QBrush(QColor(40, 0, 0)))
         self.brake_ind_bg.setPen(QPen(RED_NOTE, 2))
@@ -311,12 +330,17 @@ class GameScreen(QWidget):
         self.scene.addItem(item)
         return item
 
-    def start_session(self):
+    def start_session(self, brake_threshold=0.1):
+        self.active_brake_threshold = brake_threshold
         self.score = 0
         self.combo = 0
         self.is_active = True
         self.last_input_state = {"gas": False, "brake": False}
         self.start_ticks = int(time.time() * 1000)
+        
+        self.session_max_brake = 0.0
+        self.ptt_times = []
+        self.gas_release_time = None
         
         for note in self.notes:
             self.scene.removeItem(note.head_item)
@@ -342,25 +366,46 @@ class GameScreen(QWidget):
         
         gas_value = 0.0
         brake_value = 0.0
-        GAS_MIN = 2650; GAS_MAX = 3500; BRAKE_MIN = 40000; BRAKE_MAX = 80000
 
         def normalize_sensor(raw_value, min_value, max_value):
-            if max_value == min_value: return 0.0
-            val = (raw_value - min_value) / (max_value - min_value)
-            return max(0.0, min(1.0, val))
+            if max_value <= min_value: return 0.0
+            if (raw_value < 0): raw_value = -raw_value
+            norm = (raw_value - min_value) / (max_value - min_value)
+            return max(0.0, min(1.0, norm))
 
         if self.sensor_shm:
             try:
                 data = self.sensor_shm.read_data()
-                raw_brake = data["load_cell"]["sample"]
-                raw_gas = data["hall_effect"]["sample"]
-                gas_value = normalize_sensor(raw_gas, GAS_MIN, GAS_MAX)
-                brake_value = normalize_sensor(raw_brake, BRAKE_MIN, BRAKE_MAX)
+                raw_brake = float(data["load_cell"]["sample"])
+                raw_gas = float(data["hall_effect"]["sample"])
+                
+                # Independently track the highest force exerted this session
+                if raw_brake > self.session_max_brake:
+                    self.session_max_brake = raw_brake
+                
+                # Dynamically expand boundaries if new extremes are detected
+                if raw_brake < self.brake_min and raw_brake > MIN_BRAKE: self.brake_min = raw_brake
+                if raw_brake > self.brake_max and raw_brake < MAX_BRAKE: self.brake_max = raw_brake
+                
+                if raw_gas < self.gas_min and raw_gas > MIN_GAS: self.gas_min = raw_gas
+                if raw_gas > self.gas_max: self.gas_max = raw_gas
+
+                gas_value = normalize_sensor(raw_gas, self.gas_min, self.gas_max)
+                brake_value = normalize_sensor(raw_brake, self.brake_min, self.brake_max)
             except Exception: pass
 
-        GAS_THRESHOLD = 0.15; BRAKE_THRESHOLD = 0.01
+        GAS_THRESHOLD = 0.15; BRAKE_THRESHOLD = self.active_brake_threshold
         gas_pressed = gas_value > GAS_THRESHOLD
         brake_pressed = brake_value > BRAKE_THRESHOLD
+
+        # Track the reaction gap between gas release and brake press
+        if brake_pressed and not self.last_input_state["brake"]:
+            if self.gas_release_time:
+                self.ptt_times.append(time.time() - self.gas_release_time)
+                self.gas_release_time = None
+
+        if not gas_pressed and self.last_input_state["gas"]:
+            self.gas_release_time = time.time()
 
         if gas_pressed:
             self.gas_ind_bg.setBrush(QBrush(CYAN_NOTE))
@@ -477,7 +522,14 @@ class GameScreen(QWidget):
     def end_game(self):
         self.is_active = False
         self.timer.stop()
-        stats = {"score": self.score}
+        
+        fastest_switch = min(self.ptt_times) if self.ptt_times else 0.0
+        
+        stats = {
+            "score": self.score,
+            "max_brake": self.session_max_brake,
+            "fast_switch": fastest_switch
+        }
         self.finished_signal.emit(stats)
 
 class ResultsScreen(QWidget):
@@ -485,13 +537,27 @@ class ResultsScreen(QWidget):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(20)
+        layout.setSpacing(15)
         
         self.score_label = QLabel("FINAL SCORE: 0")
-        self.score_label.setFont(QFont("Segoe UI", 42, QFont.Weight.Bold))
+        self.score_label.setFont(QFont("Segoe UI", 48, QFont.Weight.Bold))
         self.score_label.setStyleSheet("color: #FFCC00;")
         self.score_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.score_label)
+        
+        self.brake_stat_label = QLabel("MAX BRAKE FORCE: 0")
+        self.brake_stat_label.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        self.brake_stat_label.setStyleSheet("color: #FF3C3C;")
+        self.brake_stat_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.brake_stat_label)
+        
+        self.switch_stat_label = QLabel("FASTEST SWITCH: 0.00s")
+        self.switch_stat_label.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        self.switch_stat_label.setStyleSheet("color: #00FFFF;")
+        self.switch_stat_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.switch_stat_label)
+        
+        layout.addSpacing(20)
         
         instructions = QLabel("GREEN: PLAY AGAIN  |  YELLOW: QUIT")
         instructions.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
@@ -501,6 +567,13 @@ class ResultsScreen(QWidget):
 
     def display_results(self, stats):
         self.score_label.setText(f"FINAL SCORE: {stats['score']}")
+        self.brake_stat_label.setText(f"MAX BRAKE FORCE: {int(stats['max_brake'])}")
+        
+        switch_time = stats['fast_switch']
+        if switch_time > 0:
+            self.switch_stat_label.setText(f"FASTEST SWITCH: {switch_time:.3f} s")
+        else:
+            self.switch_stat_label.setText("FASTEST SWITCH: N/A")
 
 class RhythmApp(QMainWindow):
     def __init__(self):
@@ -535,6 +608,9 @@ class RhythmApp(QMainWindow):
         
         self.prev_green = False
         self.prev_yellow = False
+        self.prev_gas_pressed = False
+        self.brake_threshold = 0.1
+        
         self.poll_timer = QTimer()
         self.poll_timer.timeout.connect(self.poll_hardware_buttons)
         self.poll_timer.start(50)  
@@ -545,6 +621,22 @@ class RhythmApp(QMainWindow):
             
         try:
             data = self.sensor_shm.read_data()
+
+            # --- GAS PEDAL THRESHOLD CALIBRATION ---
+            if "hall_effect" in data:
+                raw_gas = float(data["hall_effect"]["sample"])
+                is_gas_pressed = raw_gas > (MIN_GAS + 500)
+                
+                if self.stack.currentIndex() == 0:
+                    if is_gas_pressed and not self.prev_gas_pressed:
+                        self.brake_threshold = round(self.brake_threshold + 0.1, 1)
+                        if self.brake_threshold > 0.7:
+                            self.brake_threshold = 0.1
+                        self.menu.update_threshold_display(self.brake_threshold)
+                        
+                self.prev_gas_pressed = is_gas_pressed
+
+            # --- MENU NAVIGATION ---
             if "sync" in data and "flags" in data["sync"]:
                 green_pressed = int(data["sync"]["flags"][0]) == 1
                 yellow_pressed = int(data["sync"]["flags"][1]) == 1
@@ -568,7 +660,7 @@ class RhythmApp(QMainWindow):
         if self.game.view.width() > 100:
             self.game.view.fitInView(self.game.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
             
-        self.game.start_session()
+        self.game.start_session(self.brake_threshold)
         self.game.view.viewport().repaint()
 
     def show_results(self, stats):

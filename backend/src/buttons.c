@@ -116,7 +116,7 @@ int buttons_main_operation() {
         
         // Example: The main thread can independently read the latest values at any time
         //printf("Current stored durations - B1: %.2fms, B2: %.2fms\n", 
-               button_1.last_press_duration_ms, button_2.last_press_duration_ms);
+               //button_1.last_press_duration_ms, button_2.last_press_duration_ms);
     }
 
     lgGpiochipClose(handle);
